@@ -36,6 +36,12 @@ app.get('/', (req, res) => {
 });
 // --- Friendly homepage route (END) ---
 
+// --- Pi Validation Endpoint (START) ---
+app.get("/.well-known/pi-validation", (req, res) => {
+  res.send(process.env.PI_VALIDATION_KEY);
+});
+// --- Pi Validation Endpoint (END) ---
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
