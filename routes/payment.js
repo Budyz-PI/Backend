@@ -2,10 +2,32 @@ const express = require("express");
 const fetch = require("node-fetch");
 const { ethers } = require("ethers");
 const { body, validationResult } = require("express-validator");
+const rateLimit = require("express-rate-limit");
+const winston = require("winston");
 require("dotenv").config();
 
 const router = express.Router();
-const nftSupply = require('../utils/nftSupply');
+
+// Persistent logger setup (Winston)
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.File({ filename: "logs/error.log", level: "error" }),
+    new winston.transports.File({ filename: "logs/combined.log" }),
+  ],
+});
+if (process.env.NODE_ENV !== "production") {
+  logger.add(new winston.transports.Console({ format: winston.format.simple() }));
+}
+
+// Rate limiting middleware: max 10 requests per 10 minutes per IP
+const limiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: { success: false, error: "Too many requests, please try again later." }
+});
+router.use(limiter);
 
 // --- CONFIG (Env Only) ---
 const PI_API_KEY = process.env.PI_API_KEY;
@@ -52,6 +74,7 @@ router.post(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      logger.warn("Validation failed", { errors: errors.array() });
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
@@ -70,7 +93,7 @@ router.post(
 
       if (!piResponse.ok) {
         const errorText = await piResponse.text();
-        console.error("Pi API Error:", piResponse.status, errorText);
+        logger.error("Pi API Error", { status: piResponse.status, errorText });
         return res.status(400).json({ success: false, error: "Invalid Pi payment", detail: errorText });
       }
 
@@ -78,7 +101,7 @@ router.post(
       try {
         payment = await piResponse.json();
       } catch (jsonError) {
-        console.error("Pi Payment JSON Error:", jsonError);
+        logger.error("Pi Payment JSON Error", { jsonError });
         return res.status(500).json({ success: false, error: "Could not parse Pi payment response" });
       }
 
@@ -87,12 +110,12 @@ router.post(
         payment.to !== PI_RECEIVER_WALLET ||
         parseFloat(payment.amount) < numToBuy * NFT_PRICE_PI
       ) {
+        logger.warn("Payment validation failed", {
+          status: payment.status,
+          to: payment.to,
+          amount: payment.amount
+        });
         return res.status(400).json({ success: false, error: "Payment validation failed" });
-      }
-
-      // --- Check NFT Supply ---
-      if (nftSupply.getRemaining() < numToBuy) {
-        return res.status(400).json({ success: false, error: "Insufficient NFT supply" });
       }
 
       // --- Enforce Cap: Check NFTs already owned by this wallet ---
@@ -105,11 +128,16 @@ router.post(
         currentOwned = await nftContract.balanceOf(recipientEvmAddress, NFT_TOKEN_ID);
         currentOwned = Number(currentOwned);
       } catch (err) {
-        console.error("Error fetching wallet NFT balance:", err);
+        logger.error("Error fetching wallet NFT balance", { err });
         return res.status(500).json({ success: false, error: "Could not fetch wallet NFT balance" });
       }
 
       if (currentOwned + numToBuy > PER_WALLET_CAP) {
+        logger.warn("Wallet NFT cap exceeded", {
+          currentOwned,
+          numToBuy,
+          PER_WALLET_CAP
+        });
         return res.status(400).json({
           success: false,
           error: `Wallet NFT cap exceeded (max ${PER_WALLET_CAP} per wallet). You currently own ${currentOwned}.`,
@@ -128,14 +156,18 @@ router.post(
         );
         await tx.wait();
       } catch (blockchainError) {
-        console.error("Blockchain Transaction Error:", blockchainError);
+        logger.error("Blockchain Transaction Error", { blockchainError });
         return res.status(500).json({
           success: false,
           error: blockchainError.reason || blockchainError.message || "Blockchain transaction failed"
         });
       }
 
-      nftSupply.incrementMintedCount(numToBuy);
+      logger.info("NFT(s) delivered", {
+        txHash: tx.hash,
+        recipient: recipientEvmAddress,
+        amount: numToBuy
+      });
 
       return res.json({
         success: true,
@@ -145,7 +177,7 @@ router.post(
       });
 
     } catch (error) {
-      console.error("General Transaction Error:", error);
+      logger.error("General Transaction Error", { error });
       res.status(500).json({
         success: false,
         error: error.message || "Internal server error",

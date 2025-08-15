@@ -1,48 +1,39 @@
-const fs = require("fs");
-const path = require("path");
+// backend/utils/nftSupply.js
 
-const MAX_SUPPLY = 2000; // Adjust as needed
-const DATA_FILE = path.join(__dirname, "../nftSupply.json");
+/**
+ * Deprecated: No actual minting or supply tracking now.
+ * 
+ * This module is retained for compatibility but only provides
+ * an empty shell and static max supply value.
+ * 
+ * All functions are no-ops or return static values.
+ */
 
-let mintedCount = 0;
+const MAX_SUPPLY = 2000;
 
-// Load persisted minted count at startup
-function loadMintedCount() {
-  try {
-    const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-    mintedCount = data.mintedCount || 0;
-  } catch (e) {
-    mintedCount = 0;
-  }
+// Returns the max supply (for reference only)
+function getMaxSupply() {
+  return MAX_SUPPLY;
 }
 
-// Save minted count to file
-function saveMintedCount() {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({ mintedCount }), "utf8");
-}
-
+// Returns static max supply (all NFTs are pre-minted)
 function getRemaining() {
-  return Math.max(0, MAX_SUPPLY - mintedCount);
+  return MAX_SUPPLY;
 }
 
+// No-op: increment is disabled as minting is not performed here
 function incrementMintedCount(quantity = 1) {
-  if (mintedCount + quantity > MAX_SUPPLY) {
-    throw new Error("Exceeds max supply");
-  }
-  mintedCount += quantity;
-  saveMintedCount();
+  // No action needed; NFTs are already minted
 }
 
+// No-op: reset is disabled
 function resetMintedCount() {
-  mintedCount = 0;
-  saveMintedCount();
+  // No action needed
 }
-
-// Initialize count at startup
-loadMintedCount();
 
 module.exports = {
   MAX_SUPPLY,
+  getMaxSupply,
   getRemaining,
   incrementMintedCount,
   resetMintedCount,

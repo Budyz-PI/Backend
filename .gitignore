@@ -1,20 +1,20 @@
-Node modules
+# Node modules
 node_modules/
 
-Environment variables
+# Environment variables
 .env
 
-Logs
+# Logs
 logs
-.log
+*.log
 npm-debug.log*
 
-Build output
+# Build output
 dist/
 build/
 
-OS files
+# OS files
 .DS_Store
 
-Others (optional)
+# Others (optional)
 coverage/
