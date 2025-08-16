@@ -127,6 +127,13 @@ app.get("/", (req, res) => {
   `);
 });
 
+// --- Log for NFT Purchase Endpoint ---
+app.post("/api/buy-nft", async (req, res, next) => {
+  // Log every incoming request to /api/buy-nft
+  console.log("Received POST /api/buy-nft request:", req.body);
+  next(); // continue to the next route handler if any
+});
+
 // --- Error Handling for 404 ---
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });
