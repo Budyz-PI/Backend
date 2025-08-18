@@ -1,9 +1,10 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const session = require("express-session");
 const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
-require("dotenv").config();
 
 // --- Initialize App ---
 const app = express();
@@ -23,17 +24,23 @@ const criticalEnv = [
   "POLYGON_RPC_URL",
   "SENDER_PRIVATE_KEY"
 ];
-const missingEnv = criticalEnv.filter((key) => !process.env[key]);
+
+const missingEnv = criticalEnv.filter(key => {
+  const value = process.env[key];
+  return typeof value === 'undefined' || value.trim() === '';
+});
+
 if (missingEnv.length) {
-  console.error("❌ FATAL: Missing env variables:", missingEnv.join(", "));
+  console.error("❌ FATAL: Missing or empty env variables:");
+  missingEnv.forEach((key) => console.error(`- ${key}`));
   process.exit(1);
 }
 
 // --- Security Middleware ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "*", // Set to frontend URL for production
-    credentials: true, // Allow cookies for session
+    origin: process.env.FRONTEND_URL || "*",
+    credentials: true,
     optionsSuccessStatus: 200,
   })
 );
@@ -41,8 +48,8 @@ app.use(express.json());
 
 // --- Rate Limiting ---
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                 // Limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -114,7 +121,7 @@ app.post("/api/verify-user", async (req, res) => {
       return res.status(500).json({ success: false, error: jsonError.message });
     }
 
-    req.session.user = user; // Persist user in session
+    req.session.user = user;
     res.json({ success: true, user });
 
   } catch (error) {
@@ -139,12 +146,12 @@ app.get("/", (req, res) => {
   `);
 });
 
-// --- Error Handling for 404 ---
+// --- 404 ---
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });
 });
 
-// --- Error Handling for 500 ---
+// --- 500 ---
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err.stack || err);
   res.status(500).json({ success: false, error: err.message || "Internal server error" });
