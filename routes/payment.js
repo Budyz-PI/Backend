@@ -46,6 +46,9 @@ const PI_API_URL = USE_PI_TESTNET
 const MAX_PER_TX = parseInt(process.env.MAX_PER_TX) || 10;
 const PER_WALLET_CAP = 10;
 
+// --- NEW: Payment approval window (seconds) ---
+const PAYMENT_TIMEOUT_SECONDS = parseInt(process.env.PAYMENT_TIMEOUT_SECONDS) || 60;
+
 // --- ABI (Externalize if large) ---
 const NFT_ABI = [
   // For ERC-1155; if ERC-721, update accordingly
@@ -234,6 +237,20 @@ router.post(
       } catch (jsonError) {
         logger.error("Pi Payment JSON Error", { jsonError });
         return res.status(500).json({ success: false, error: "Could not parse Pi payment response" });
+      }
+
+      // --- Payment approval window check (NEW) ---
+      if (payment && payment.created_at) {
+        const createdAt = new Date(payment.created_at).getTime();
+        const now = Date.now();
+        if (now - createdAt > PAYMENT_TIMEOUT_SECONDS * 1000) {
+          logger.warn("Payment approval window expired", {
+            createdAt,
+            now,
+            window: PAYMENT_TIMEOUT_SECONDS
+          });
+          return res.status(400).json({ success: false, error: `Payment approval window expired (${PAYMENT_TIMEOUT_SECONDS} seconds). Please try again.` });
+        }
       }
 
       if (
